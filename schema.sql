@@ -2,6 +2,7 @@ DROP TABLE IF EXISTS `users`;
 DROP TABLE IF EXISTS `maps`;
 DROP TABLE IF EXISTS `wh_systems`;
 DROP TABLE IF EXISTS `wh_types`;
+DROP TABLE IF EXISTS `log`;
 
 CREATE TABLE `users` (
 	`id` int unsigned NOT NULL AUTO_INCREMENT,
@@ -37,6 +38,16 @@ CREATE TABLE `wh_systems` (
 	PRIMARY KEY (`id`),
 	CONSTRAINT `wh_static1` FOREIGN KEY (`static1`) REFERENCES `wh_types` (`id`),
 	CONSTRAINT `wh_static2` FOREIGN KEY (`static2`) REFERENCES `wh_types` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
+
+CREATE TABLE `log` (
+	`index` int unsigned NOT NULL AUTO_INCREMENT,
+	`time` datetime NOT NULL,
+	`user_id` int unsigned NOT NULL,
+	`action_id` tinyint NOT NULL,
+	`log_message` varchar(65) NOT NULL,
+	PRIMARY KEY (`index`, `time`,`user_id`,`action_id`),
+	FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
 
 INSERT INTO `wh_types` VALUES

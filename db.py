@@ -160,8 +160,9 @@ def delete_system(auth_user, system_name):
 				if c['name'] == system_name:
 					node['connections'].pop(i)
 					return c
-				else:
-					return delete_node(c)
+				deleted_node = delete_node(c)
+				if deleted_node:
+					return deleted_node
 
 	with conn.cursor() as c:
 		r = query_one(c, 'SELECT json from maps')
@@ -169,12 +170,11 @@ def delete_system(auth_user, system_name):
 		for root_node in map_data:
 			if root_node['name'] == system_name:
 				raise UpdateError('cannot delete root node')
-		deleted_node = None
 		for node in map_data:
 			deleted_node = delete_node(node) # this will not delete root nodes (even if it passed previous check)
 			if deleted_node is not None:
 				break
-		if deleted_node is None:
+		else:
 			raise UpdateError('system not found')
 		map_json = json.dumps(map_data)
 		c.execute('UPDATE maps SET json = ?', (map_json,))

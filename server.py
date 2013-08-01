@@ -96,20 +96,16 @@ class LogHandler(BaseHandler):
 	@tornado.web.authenticated
 	def get(self):
 		with db.conn.cursor() as c:
-			log = []
-			temp_log = db.query(c, 'SELECT l.time, u.username, l.action_id, l.log_message FROM log l, users u where u.id = l.user_id ORDER BY time DESC LIMIT 50')
-			temp_log = list(temp_log)
-			for row in temp_log:
-				log.append(self.parse_log(row))
+			log_rows = db.query(c, '''
+				SELECT l.time, u.username, l.action_id, l.log_message
+				FROM log l
+				JOIN users u
+				ON u.id = l.user_id
+				ORDER BY time DESC LIMIT 50
+				''')
+			log_rows = list(log_rows)
+			log = map(operator.attrgetter('__dict__'), log_rows)
 		self.render('log.html', log=log)
-
-	def parse_log(self, row):
-		parsed_row = {}
-		parsed_row['time'] = row.time
-		parsed_row['username'] = row.username
-		parsed_row['log_message'] = row.log_message
-
-		return parsed_row
 
 websockets = set()
 class DataHandler:

@@ -41,12 +41,13 @@ CREATE TABLE `wh_systems` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
 
 CREATE TABLE `log` (
-	`index` int unsigned NOT NULL AUTO_INCREMENT,
+	`id` int unsigned NOT NULL AUTO_INCREMENT,
 	`time` datetime NOT NULL,
 	`user_id` int unsigned NOT NULL,
 	`action_id` tinyint NOT NULL,
 	`log_message` varchar(65) NOT NULL,
-	PRIMARY KEY (`index`, `time`,`user_id`,`action_id`),
+	PRIMARY KEY (`id`),
+	INDEX `i_log_time` (`time`),
 	FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
 

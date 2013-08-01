@@ -56,11 +56,14 @@ window.addEvent('domready', function() {
 				layer.destroy();
 			layer = new Kinetic.Layer();
 			var y = 75;
+			var cols = 0;
 			maps.each(function(map) {
-				var rows = drawNode(map, 100, y);
-				y += rows * rowHeight;
+				var stats = drawNode(map, 80, y);
+				y += stats[0] * rowHeight;
+				cols = Math.max(stats[1], cols);
 			});
 			stage.setHeight(y);
+			stage.setWidth(cols * 150);
 			stage.add(layer);
 			break;
 		case 'SYS':
@@ -88,18 +91,21 @@ window.addEvent('domready', function() {
 
 	function drawNode(node, x, y) {
 		drawSystem(node, x, y);
-		var new_lines = 0;
+		var newLines = 0;
+		var newCols = 0;
 		if (node.connections) {
 			for (var i = 0; i < node.connections.length; i++) {
 				var child = node.connections[i];
-				drawLink(x, y, x + 150, y + new_lines * rowHeight, child.eol);
-				new_lines += drawNode(child, x + 150, y + new_lines * rowHeight);
+				drawLink(x, y, x + 150, y + newLines * rowHeight, child.eol);
+				var stats = drawNode(child, x + 150, y + newLines * rowHeight);
+				newLines += stats[0];
+				newCols = Math.max(stats[1], newCols);
 			}
 		}
 		if (current_system && node.name == current_system.name) {
 			handleClick(node);
 		}
-		return new_lines || 1;
+		return [newLines || 1, newCols + 1];
 	}
 
 	var class_color = {
@@ -277,9 +283,31 @@ window.addEvent('domready', function() {
 		current_system = system;
 	}
 	$('delete').addEvent('click', function(e) {
-		send('DELETE', system_name.get('text'));
-		bottom_divs.setStyle('display', 'none');
-		dest_ac.setStyle('display', 'none');
+		var send_delete = function() {
+			send('DELETE', system_name.get('text'));
+			bottom_divs.setStyle('display', 'none');
+			dest_ac.setStyle('display', 'none');
+		}
+		if (current_system.class == 'home') {
+			var dr_div = new Element('div', {'class': 'delete_root'});
+			var text = new Element('div', {
+				'text': 'you are about to remove a root system! are you sure?',
+				'class': 'text',
+			});
+			var yes = new Element('input', {'type': 'button', 'value': 'yes'});
+			var no = new Element('input', {'type': 'button', 'value': 'no'});
+			dr_div.adopt(text, yes, no);
+			yes.addEvent('click', function(e) {
+				$('modal_bg').fireEvent('click');
+				send_delete();
+			});
+			no.addEvent('click', function(e) {
+				$('modal_bg').fireEvent('click');
+			});
+			modal(dr_div)
+		} else {
+			send_delete();
+		}
 	});
 	$('paste_sigs').addEvent('click', function(e) {
 		var ps_div = new Element('div', {'class': 'paste_sigs'});

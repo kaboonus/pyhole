@@ -90,6 +90,7 @@ def add_system(auth_user, system):
 				if add_node(c):
 					return True
 
+	root_system = 'src' not in system
 	wspace_system = False
 	if system['dest'][0] == 'J':
 		try:
@@ -97,7 +98,7 @@ def add_system(auth_user, system):
 			wspace_system = True
 		except ValueError:
 			pass
-	if not wspace_system:
+	if not wspace_system and not root_system:
 		with eve_conn.cursor() as c:
 			r = query_one(c, '''
 			SELECT solarSystemID, security FROM mapSolarSystems
@@ -146,7 +147,10 @@ def add_system(auth_user, system):
 
 		r = query_one(c, 'SELECT json from maps')
 		map_data = json.loads(r.json)
-		if not any(map(add_node, map_data)):
+		if root_system:
+			system = {'name': system['dest'], 'class': 'home'}
+			map_data.append(system)
+		elif not any(map(add_node, map_data)):
 			raise UpdateError('src system not found')
 		map_json = json.dumps(map_data)
 		c.execute('UPDATE maps SET json = ?', (map_json,))
@@ -167,15 +171,17 @@ def delete_system(auth_user, system_name):
 	with conn.cursor() as c:
 		r = query_one(c, 'SELECT json from maps')
 		map_data = json.loads(r.json)
-		for root_node in map_data:
+		for i, root_node in enumerate(map_data):
 			if root_node['name'] == system_name:
-				raise UpdateError('cannot delete root node')
-		for node in map_data:
-			deleted_node = delete_node(node) # this will not delete root nodes (even if it passed previous check)
-			if deleted_node is not None:
+				deleted_node = map_data.pop(i)
 				break
 		else:
-			raise UpdateError('system not found')
+			for node in map_data:
+				deleted_node = delete_node(node)
+				if deleted_node is not None:
+						break
+		if deleted_node is None:
+				raise UpdateError('system not found')
 		map_json = json.dumps(map_data)
 		c.execute('UPDATE maps SET json = ?', (map_json,))
 		log_action(c, auth_user, ACTIONS.DELETE_SYSTEM, deleted_node)
@@ -196,7 +202,7 @@ def toggle_eol(auth_user, src, dest):
 		map_data = json.loads(r.json)
 		changed_node = None
 		for node in map_data:
-			changed_node = toggle_node(node) # this will not delete root nodes (even if it passed previous check)
+			changed_node = toggle_node(node)
 			if changed_node is not None:
 				break
 		if changed_node is None:
@@ -287,13 +293,19 @@ def log_action(conn_cursor, user_id, action, details):
 	log_message = ''
 
 	if action == ACTIONS.ADD_SYSTEM:
-		log_message =  'Added system ' + details['name'] + ' connected to ' + details['src']
+		if 'src' not in details:
+			log_message =  'Added new home system ' + details['name']
+		else:
+			log_message =  'Added system ' + details['name'] + ' connected to ' + details['src']
 
 	elif action == ACTIONS.DELETE_SYSTEM:
-		log_message = 'Deleted system ' + details['name']
+		if details['class'] == 'home':
+			log_message = 'Deleted home system ' + details['name']
+		else:
+			log_message = 'Deleted system ' + details['name']
 		if 'connections' in details:
 			for system in details['connections']:
-				log_action(conn_cursor, user_id, ACTIONS.DELETE_SYSTEM, {'name': system['name']})
+				log_action(conn_cursor, user_id, ACTIONS.DELETE_SYSTEM, system)
 
 	elif action == ACTIONS.TOGGLE_EOL:
 		if details['eol']:

@@ -11,13 +11,13 @@ conn = oursql.connect(db='pyhole', user='pyhole', passwd='pyhole', autoreconnect
 eve_conn = oursql.connect(db='eve', user='eve', passwd='eve', autoreconnect=True)
 
 class ACTIONS(object):
-    ADD_SYSTEM = 1
-    DELETE_SYSTEM = 2
-    TOGGLE_EOL = 3
-	# CREATE_USER = 4
-    # ADD_SIGNATURES = 5
-    # UPDATE_SIGNATURES = 6
-    # DELETE_SIGNATURE = 7
+	ADD_SYSTEM = 1
+	DELETE_SYSTEM = 2
+	TOGGLE_EOL = 3
+	CREATE_USER = 4
+	# ADD_SIGNATURES = 5
+	# UPDATE_SIGNATURES = 6
+	# DELETE_SIGNATURE = 7
 
 def query(cursor, sql, *args):
 	cursor.execute(sql, args)
@@ -53,7 +53,7 @@ def create_user(auth_user, username, password):
 	with conn.cursor() as c:
 		c.execute('INSERT INTO users (username, password, salt, admin) VALUES(?, ?, ?, 0)',
 				[username, hashed, salt_hex])
-	#log_action(c, auth_user, ACTIONS.CREATE_USER, {'username':username})
+		log_action(c, auth_user, ACTIONS.CREATE_USER, {'username': username})
 
 def check_login(username, password):
 	with conn.cursor() as c:
@@ -213,8 +213,6 @@ def toggle_eol(auth_user, src, dest):
 	return map_json
 
 def add_signatures(auth_user, system_name, new_sigs):
-	log_added = {'system_name':system_name, 'signatures': []}
-	log_updated = {'system_name':system_name, 'signatures': []}
 	def add_sigs_node(node):
 		if node['name'] == system_name:
 			sigs = node.get('signatures', [])
@@ -238,14 +236,15 @@ def add_signatures(auth_user, system_name, new_sigs):
 				if add_sigs_node(c):
 					return True
 
+	log_added = {'system_name': system_name, 'signatures': []}
+	log_updated = {'system_name': system_name, 'signatures': []}
 	with conn.cursor() as c:
 		r = query_one(c, 'SELECT json from maps')
 		map_data = json.loads(r.json)
 		if not any(map(add_sigs_node, map_data)):
 			raise UpdateError('system not found')
-		# For now, don't log
-		# if log_added['signatures']: log_action(c, auth_user, ACTIONS.ADD_SIGNATURES, log_added)
-		# if log_updated['signatures']: log_action(c, auth_user, ACTIONS.UPDATE_SIGNATURES, log_updated)
+		#if log_added['signatures']: log_action(c, auth_user, ACTIONS.ADD_SIGNATURES, log_added)
+		#if log_updated['signatures']: log_action(c, auth_user, ACTIONS.UPDATE_SIGNATURES, log_updated)
 		map_json = json.dumps(map_data)
 		c.execute('UPDATE maps SET json = ?', (map_json,))
 	return map_json
@@ -277,72 +276,49 @@ def delete_signature(auth_user, system_name, sig_id):
 			raise UpdateError('system not found')
 		map_json = json.dumps(map_data)
 		c.execute('UPDATE maps SET json = ?', (map_json,))
-		#log_item = {'system_name':system_name, 'signature':sig_removed}
+		#log_item = {'system_name': system_name, 'signature': sig_removed}
 		#log_action(c, auth_user, ACTIONS.DELETE_SIGNATURE, log_item)
 	return map_json
 
-def log_action(conn_cursor, user_id, action, details):
-	"""Adds a log entry to the database.
-
-	Arguments:
-	user_id -- integer that must match an existing user in the database
-	action -- enum representing the action
-	details -- dict with the details of the action
-	"""
-
-	log_message = ''
-
+def log_action(cursor, user_id, action, details):
 	if action == ACTIONS.ADD_SYSTEM:
 		if 'src' not in details:
-			log_message =  'Added new home system ' + details['name']
+			log_message = 'added new root system ' + details['name']
 		else:
-			log_message =  'Added system ' + details['name'] + ' connected to ' + details['src']
-
+			log_message = 'added system {name} connected to {src}'.format(**details)
 	elif action == ACTIONS.DELETE_SYSTEM:
 		if details['class'] == 'home':
-			log_message = 'Deleted home system ' + details['name']
+			log_message = 'deleted root system ' + details['name']
 		else:
-			log_message = 'Deleted system ' + details['name']
+			log_message = 'deleted system ' + details['name']
 		if 'connections' in details:
 			for system in details['connections']:
-				log_action(conn_cursor, user_id, ACTIONS.DELETE_SYSTEM, system)
-
+				log_action(cursor, user_id, ACTIONS.DELETE_SYSTEM, system)
 	elif action == ACTIONS.TOGGLE_EOL:
 		if details['eol']:
-			log_message =  'System ' + details['name'] + ' set to EOL'
+			log_message = 'set {name} to EoL'.format(**details)
 		else:
-			log_message =  'System ' + details['name'] + ' reverted to not EOL'
-
+			log_message = 'reverted {name} to not EoL'.format(**details)
+	elif action == ACTIONS.CREATE_USER:
+		log_message = 'created user ' + details['username']
 	else:
 		raise RuntimeError('unhandled log_action')
 
 	''' For now, don't log these
-
-	elif action == ACTIONS.CREATE_USER:
-		log_message = 'Created user ' + details['username']
-
 	elif action == ACTIONS.ADD_SIGNATURES:
-		log_message = 'Added signatures to ' + details['system_name'] + ': '
-		for i in range(len(details['signatures'])-1):
-			log_message += details['signatures'][i][0] + ', '
-		log_message += details['signatures'][-1][0]
-
+		sig_ids = map(operator.itemgetter(0), details['signatures'])
+		log_message = 'Added signatures to {}: {}'.format(details['system_name'], ', '.join(sig_ids))
 	elif action == ACTIONS.UPDATE_SIGNATURES:
-		log_message = 'Updated signatures at ' + details['system_name'] + ': '
-		for i in range(len(details['signatures'])-1):
-			log_message += details['signatures'][i][0] + ', '
-		log_message += details['signatures'][-1][0]
-
+		sig_ids = map(operator.itemgetter(0), details['signatures'])
+		log_message = 'Updated signatures at {}: {}'.format(details['system_name'], ', '.join(sig_ids))
 	elif action == ACTIONS.DELETE_SIGNATURE:
-		log_message = 'Deleted signature from ' + details['system_name'] + ': ' + details['signature'][0]
+		log_message = 'Deleted signature from {}: {}'.format(details['system_name'], details['signature'][0])
 	'''
 
-	#trim if it's too long so database doesn't complain
-	if len(log_message) > 65:
-		log_message = log_message[:65]
-	conn_cursor.execute('INSERT INTO log (time, user_id, action_id, log_message) VALUES(UTC_TIMESTAMP(), ?, ?, ?)',
-		[user_id, action, log_message])
-
+	cursor.execute('''
+	INSERT INTO logs (time, user_id, action_id, log_message)
+	VALUES(UTC_TIMESTAMP(), ?, ?, ?)
+	''', [user_id, action, log_message])
 
 class DBRow:
 	def __init__(self, result, description):

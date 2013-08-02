@@ -98,14 +98,12 @@ class LogHandler(BaseHandler):
 		with db.conn.cursor() as c:
 			log_rows = db.query(c, '''
 				SELECT l.time, u.username, l.action_id, l.log_message
-				FROM log l
-				JOIN users u
-				ON u.id = l.user_id
+				FROM logs AS l
+				JOIN users AS u ON u.id = l.user_id
 				ORDER BY time DESC LIMIT 50
 				''')
-			log_rows = list(log_rows)
 			log = map(operator.attrgetter('__dict__'), log_rows)
-		self.render('log.html', log=log)
+			self.render('log.html', log=log)
 
 websockets = set()
 class DataHandler:

@@ -17,6 +17,17 @@ CREATE TABLE `maps` (
 	`json` text NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
 
+CREATE TABLE `logs` (
+	`id` int unsigned NOT NULL AUTO_INCREMENT,
+	`time` datetime NOT NULL,
+	`user_id` int unsigned NOT NULL,
+	`action_id` tinyint NOT NULL,
+	`log_message` varchar(65) NOT NULL,
+	PRIMARY KEY (`id`),
+	INDEX `i_log_time` (`time`),
+	FOREIGN KEY (user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
+
 CREATE TABLE `wh_types` (
 	`id` tinyint unsigned NOT NULL,
 	`name` char(4) NOT NULL,
@@ -38,17 +49,6 @@ CREATE TABLE `wh_systems` (
 	PRIMARY KEY (`id`),
 	CONSTRAINT `wh_static1` FOREIGN KEY (`static1`) REFERENCES `wh_types` (`id`),
 	CONSTRAINT `wh_static2` FOREIGN KEY (`static2`) REFERENCES `wh_types` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
-
-CREATE TABLE `log` (
-	`id` int unsigned NOT NULL AUTO_INCREMENT,
-	`time` datetime NOT NULL,
-	`user_id` int unsigned NOT NULL,
-	`action_id` tinyint NOT NULL,
-	`log_message` varchar(65) NOT NULL,
-	PRIMARY KEY (`id`),
-	INDEX `i_log_time` (`time`),
-	FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
 
 INSERT INTO `wh_types` VALUES

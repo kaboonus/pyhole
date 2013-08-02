@@ -194,8 +194,9 @@ def toggle_eol(auth_user, src, dest):
 				if node['name'] == src and c['name'] == dest:
 					c['eol'] = not c['eol']
 					return c
-				else:
-					return toggle_node(c)
+				toggled_node = toggle_node(c)
+				if toggled_node:
+					return toggled_node
 
 	with conn.cursor() as c:
 		r = query_one(c, 'SELECT json from maps')

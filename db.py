@@ -11,13 +11,10 @@ conn = oursql.connect(db='pyhole', user='pyhole', passwd='pyhole', autoreconnect
 eve_conn = oursql.connect(db='eve', user='eve', passwd='eve', autoreconnect=True)
 
 class ACTIONS(object):
-	ADD_SYSTEM = 1
-	DELETE_SYSTEM = 2
-	TOGGLE_EOL = 3
-	CREATE_USER = 4
-	# ADD_SIGNATURES = 5
-	# UPDATE_SIGNATURES = 6
-	# DELETE_SIGNATURE = 7
+	CREATE_USER = 1
+	ADD_SYSTEM = 2
+	DELETE_SYSTEM = 3
+	TOGGLE_EOL = 4
 
 def query(cursor, sql, *args):
 	cursor.execute(sql, args)
@@ -179,9 +176,9 @@ def delete_system(auth_user, system_name):
 			for node in map_data:
 				deleted_node = delete_node(node)
 				if deleted_node is not None:
-						break
+					break
 		if deleted_node is None:
-				raise UpdateError('system not found')
+			raise UpdateError('system not found')
 		map_json = json.dumps(map_data)
 		c.execute('UPDATE maps SET json = ?', (map_json,))
 		log_action(c, auth_user, ACTIONS.DELETE_SYSTEM, deleted_node)
@@ -224,10 +221,7 @@ def add_signatures(auth_user, system_name, new_sigs):
 					if new_sig[4] >= sig[4]: # compare signal strength
 						for i in range(1, len(new_sig)):
 							sig[i] = new_sig[i]
-						log_updated['signatures'].append(sig)
 					del new_sigs[sig_id]
-			for sig_id in new_sigs:
-				log_added['signatures'].append(new_sigs[sig_id])
 			sigs.extend(new_sigs.values())
 
 			node['signatures'] = sigs
@@ -237,15 +231,11 @@ def add_signatures(auth_user, system_name, new_sigs):
 				if add_sigs_node(c):
 					return True
 
-	log_added = {'system_name': system_name, 'signatures': []}
-	log_updated = {'system_name': system_name, 'signatures': []}
 	with conn.cursor() as c:
 		r = query_one(c, 'SELECT json from maps')
 		map_data = json.loads(r.json)
 		if not any(map(add_sigs_node, map_data)):
 			raise UpdateError('system not found')
-		#if log_added['signatures']: log_action(c, auth_user, ACTIONS.ADD_SIGNATURES, log_added)
-		#if log_updated['signatures']: log_action(c, auth_user, ACTIONS.UPDATE_SIGNATURES, log_updated)
 		map_json = json.dumps(map_data)
 		c.execute('UPDATE maps SET json = ?', (map_json,))
 	return map_json
@@ -260,25 +250,20 @@ def delete_signature(auth_user, system_name, sig_id):
 					break
 			if index is None:
 				raise UpdateError('sig id not found')
-			return node['signatures'].pop(index)
+			node['signatures'].pop(index)
+			return True
 		if 'connections' in node:
 			for c in node['connections']:
-				return del_sig_node(c)
+				if del_sig_node(c):
+					return True
 
 	with conn.cursor() as c:
 		r = query_one(c, 'SELECT json from maps')
 		map_data = json.loads(r.json)
-		sig_removed = None
-		for node in map_data:
-			sig_removed = del_sig_node(node)
-			if sig_removed is not None:
-				break
-		if sig_removed is None:
+		if not any(map(del_sig_node, map_data)):
 			raise UpdateError('system not found')
 		map_json = json.dumps(map_data)
 		c.execute('UPDATE maps SET json = ?', (map_json,))
-		#log_item = {'system_name': system_name, 'signature': sig_removed}
-		#log_action(c, auth_user, ACTIONS.DELETE_SIGNATURE, log_item)
 	return map_json
 
 def log_action(cursor, user_id, action, details):
@@ -304,17 +289,6 @@ def log_action(cursor, user_id, action, details):
 		log_message = 'created user ' + details['username']
 	else:
 		raise RuntimeError('unhandled log_action')
-
-	''' For now, don't log these
-	elif action == ACTIONS.ADD_SIGNATURES:
-		sig_ids = map(operator.itemgetter(0), details['signatures'])
-		log_message = 'Added signatures to {}: {}'.format(details['system_name'], ', '.join(sig_ids))
-	elif action == ACTIONS.UPDATE_SIGNATURES:
-		sig_ids = map(operator.itemgetter(0), details['signatures'])
-		log_message = 'Updated signatures at {}: {}'.format(details['system_name'], ', '.join(sig_ids))
-	elif action == ACTIONS.DELETE_SIGNATURE:
-		log_message = 'Deleted signature from {}: {}'.format(details['system_name'], details['signature'][0])
-	'''
 
 	cursor.execute('''
 	INSERT INTO logs (time, user_id, action_id, log_message)

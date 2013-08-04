@@ -80,8 +80,8 @@ class CreateUserHandler(BaseHandler):
 	@tornado.web.authenticated
 	def post(self):
 		with db.conn.cursor() as c:
-			self.auth_user = int(self.get_secure_cookie('user_id'))
-			r = db.query_one(c, 'SELECT admin FROM users WHERE id = ?', self.auth_user)
+			self.user_id = int(self.get_secure_cookie('user_id'))
+			r = db.query_one(c, 'SELECT admin FROM users WHERE id = ?', self.user_id)
 			admin = bool(r.admin)
 			if not admin:
 				raise tornado.web.HTTPError(403)
@@ -89,7 +89,7 @@ class CreateUserHandler(BaseHandler):
 		password = self.get_argument('password')
 		if not username or not password:
 			raise tornado.web.HTTPError(400)
-		db.create_user(self.auth_user, username, password)
+		db.create_user(self.user_id, username, password)
 		self.redirect('/account')
 
 class LogHandler(BaseHandler):
@@ -124,14 +124,14 @@ class DataHandler:
 	def add(self, system_json):
 		try:
 			system = json.loads(system_json)
-			map_json = db.add_system(self.auth_user, system)
+			map_json = db.add_system(self.user_id, system)
 			self.__send_map(map_json)
 		except db.UpdateError as e:
 			self.__send_err(e)
 
 	def delete(self, system_name):
 		try:
-			map_json = db.delete_system(self.auth_user, system_name)
+			map_json = db.delete_system(self.user_id, system_name)
 			self.__send_map(map_json)
 		except db.UpdateError as e:
 			self.__send_err(e)
@@ -139,7 +139,7 @@ class DataHandler:
 	def toggle_eol(self, system_names):
 		try:
 			src, dest = system_names.split()
-			map_json = db.toggle_eol(self.auth_user, src, dest)
+			map_json = db.toggle_eol(self.user_id, src, dest)
 			self.__send_map(map_json)
 		except db.UpdateError as e:
 			self.__send_err(e)
@@ -169,27 +169,27 @@ class DataHandler:
 			fields[4] = float(fields[4][:-1]) # '100.0%' -> 100.0
 			sigs[fields[0]] = fields[:5]
 		if len(sigs):
-			map_json = db.add_signatures(self.auth_user, system_name, sigs)
+			map_json = db.add_signatures(self.user_id, system_name, sigs)
 			self.__send_map(map_json)
 
 	def delete_signature(self, args):
 		system_name, sig_id = args.split()
-		map_json = db.delete_signature(self.auth_user, system_name, sig_id)
+		map_json = db.delete_signature(self.user_id, system_name, sig_id)
 		self.__send_map(map_json)
 
 class MapWSHandler(DataHandler, tornado.websocket.WebSocketHandler):
 	def __init__(self, *args, **kwargs):
 		super(MapWSHandler, self).__init__(*args, **kwargs)
-		self.auth_user = None
+		self.user_id = None
 
 	def on_message(self, message):
 		split = message.split(' ', 1)
-		if self.auth_user is None and split[0] != 'HELO':
+		if self.user_id is None and split[0] != 'HELO':
 			return
 		if split[0] == 'HELO':
 			cookies = http.cookies.SimpleCookie(split[1])
 			user_id_cookie = cookies['user_id'].value
-			self.auth_user = int(tornado.web.decode_signed_value(config.web.cookie_secret, 'user_id', user_id_cookie))
+			self.user_id = int(tornado.web.decode_signed_value(config.web.cookie_secret, 'user_id', user_id_cookie))
 			self.helo()
 			websockets.add(self)
 		elif split[0] == 'ADD':
@@ -212,7 +212,7 @@ class MapWSHandler(DataHandler, tornado.websocket.WebSocketHandler):
 
 class MapAJAXHandler(DataHandler, tornado.web.RequestHandler):
 	def get(self, command):
-		self.auth_user = int(self.get_secure_cookie('user_id')) # auth check
+		self.user_id = int(self.get_secure_cookie('user_id')) # auth check
 		args = self.get_argument('args', None)
 		if command == 'HELO':
 			self.helo()

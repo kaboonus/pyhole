@@ -137,6 +137,13 @@ def add_system(user_id, system):
 				jumps[trade_hub] = list(route)
 			client.close()
 			system['jumps'] = jumps
+
+			adj = query_one(c, '''
+			select 1 from mapSolarSystemJumps where fromSolarSystemID = ?
+			and toSolarSystemID = (select solarSystemID from mapSolarSystems
+			where solarSystemName = ?);
+			''', r.solarSystemID, system['src'])
+			system['adjacent'] = adj is not None
 	with conn.cursor() as c:
 		if wspace_system:
 			system['dest'] = system['dest'].upper()
